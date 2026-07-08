@@ -8,6 +8,7 @@ public enum AuthError: Error, Equatable, Sendable {
     case invalidServerResponse
     case refreshFailed(String)
     case notAuthenticated
+    case signUpNotSupported(AuthProviderID)
     case keychain(OSStatus)
 }
 
@@ -28,6 +29,8 @@ extension AuthError: LocalizedError {
             return "Token refresh failed: \(message)"
         case .notAuthenticated:
             return "No user is currently signed in."
+        case .signUpNotSupported(let id):
+            return "Provider '\(id.rawValue)' doesn't support sign-up; use signIn instead (its first sign-in creates the account)."
         case .keychain(let status):
             return "Keychain error (OSStatus \(status))."
         }

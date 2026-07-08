@@ -13,17 +13,20 @@ public final class EmailPasswordProvider: AuthProvider, Sendable {
 
     private let baseURL: URL
     private let loginPath: String
+    private let registerPath: String
     private let refreshPath: String
     private let session: URLSession
 
     public init(
         baseURL: URL,
         loginPath: String = "auth/login",
+        registerPath: String = "auth/register",
         refreshPath: String = "auth/refresh",
         session: URLSession = .shared
     ) {
         self.baseURL = baseURL
         self.loginPath = loginPath
+        self.registerPath = registerPath
         self.refreshPath = refreshPath
         self.session = session
     }
@@ -34,6 +37,20 @@ public final class EmailPasswordProvider: AuthProvider, Sendable {
         }
         let body = LoginRequest(email: credentials.email, password: credentials.password)
         return try await post(path: loginPath, body: body)
+    }
+
+    public func register(with credentials: any AuthCredentials) async throws -> AuthTokenSet {
+        guard let credentials = credentials as? EmailPasswordCredentials else {
+            throw AuthError.invalidCredentials
+        }
+        // Expects the register endpoint to return the same token payload as
+        // login, so the user is signed in immediately after signing up.
+        let body = RegisterRequest(
+            email: credentials.email,
+            password: credentials.password,
+            name: credentials.displayName
+        )
+        return try await post(path: registerPath, body: body)
     }
 
     public func refresh(using refreshToken: String) async throws -> AuthTokenSet {
@@ -90,6 +107,12 @@ public final class EmailPasswordProvider: AuthProvider, Sendable {
 private struct LoginRequest: Encodable {
     let email: String
     let password: String
+}
+
+private struct RegisterRequest: Encodable {
+    let email: String
+    let password: String
+    let name: String?
 }
 
 private struct RefreshRequest: Encodable {

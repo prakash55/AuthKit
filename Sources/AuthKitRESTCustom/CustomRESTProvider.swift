@@ -10,6 +10,7 @@ public final class CustomRESTProvider: NSObject, AuthProvider, URLSessionDelegat
     public let id: AuthProviderID
 
     private let buildAuthenticateRequest: @Sendable (any AuthCredentials) throws -> URLRequest
+    private let buildRegisterRequest: (@Sendable (any AuthCredentials) throws -> URLRequest)?
     private let buildRefreshRequest: @Sendable (String) throws -> URLRequest
     private let parseResponse: @Sendable (Data, HTTPURLResponse) throws -> AuthTokenSet
     private let pinning: PinningConfig?
@@ -21,18 +22,24 @@ public final class CustomRESTProvider: NSObject, AuthProvider, URLSessionDelegat
     ///   - buildAuthenticateRequest: given the credentials passed to `AuthManager.signIn`,
     ///     return the `URLRequest` to hit your login endpoint. Throw `AuthError.invalidCredentials`
     ///     if the concrete credentials type isn't what you expect.
+    ///   - buildRegisterRequest: optional. Given the credentials passed to `AuthManager.signUp`,
+    ///     return the `URLRequest` for your registration endpoint (expected to return the same
+    ///     token payload as login, so the user is signed in on success). Omit if your backend
+    ///     has no sign-up — `signUp` then throws `AuthError.signUpNotSupported`.
     ///   - buildRefreshRequest: given a refresh token, return the `URLRequest` for your refresh endpoint.
     ///   - parseResponse: turn a successful HTTP response into an `AuthTokenSet`.
     public init(
         id: AuthProviderID,
         pinning: PinningConfig? = nil,
         buildAuthenticateRequest: @escaping @Sendable (any AuthCredentials) throws -> URLRequest,
+        buildRegisterRequest: (@Sendable (any AuthCredentials) throws -> URLRequest)? = nil,
         buildRefreshRequest: @escaping @Sendable (String) throws -> URLRequest,
         parseResponse: @escaping @Sendable (Data, HTTPURLResponse) throws -> AuthTokenSet
     ) {
         self.id = id
         self.pinning = pinning
         self.buildAuthenticateRequest = buildAuthenticateRequest
+        self.buildRegisterRequest = buildRegisterRequest
         self.buildRefreshRequest = buildRefreshRequest
         self.parseResponse = parseResponse
         super.init()
@@ -41,6 +48,14 @@ public final class CustomRESTProvider: NSObject, AuthProvider, URLSessionDelegat
 
     public func authenticate(with credentials: any AuthCredentials) async throws -> AuthTokenSet {
         let request = try buildAuthenticateRequest(credentials)
+        return try await run(request)
+    }
+
+    public func register(with credentials: any AuthCredentials) async throws -> AuthTokenSet {
+        guard let buildRegisterRequest else {
+            throw AuthError.signUpNotSupported(id)
+        }
+        let request = try buildRegisterRequest(credentials)
         return try await run(request)
     }
 

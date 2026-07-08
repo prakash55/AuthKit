@@ -51,7 +51,20 @@ await manager.signOut()
 log("1) configure() with the demo provider")
 manager.configure(providers: [demoProvider])
 
-log("2) signIn() with valid credentials")
+log("2) signUp() a brand-new account — user is signed in on success")
+do {
+    let user = try await manager.signUp(
+        using: demoProviderID,
+        credentials: DemoCredentials(username: "newcomer", password: "password")
+    )
+    log("   signUp returned user: \(user.email ?? user.id)")
+} catch {
+    log("   signUp failed: \(error.localizedDescription)")
+    exit(1)
+}
+await manager.signOut()
+
+log("2b) signIn() with valid credentials")
 do {
     let user = try await manager.signIn(
         using: demoProviderID,

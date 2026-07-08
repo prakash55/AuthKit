@@ -29,6 +29,13 @@ final class AuthSession: ObservableObject {
         )
     }
 
+    func signUpWithEmail(_ email: String, password: String, name: String) async {
+        _ = try? await AuthManager.shared.signUp(
+            using: .emailPassword,
+            credentials: EmailPasswordCredentials(email: email, password: password, displayName: name)
+        )
+    }
+
     // func signInWithGoogle() async {
     //     _ = try? await AuthManager.shared.signIn(using: .google, credentials: NoCredentials())
     // }

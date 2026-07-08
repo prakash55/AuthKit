@@ -57,6 +57,14 @@ public final class PhoneOTPProvider: AuthProvider, Sendable {
         return try await tokenSet(from: request)
     }
 
+    /// For phone auth, verifying the code creates the account if the number
+    /// is new, so sign-up and sign-in are the same operation. `signUp` is
+    /// supported purely as a convenience for apps that want a distinct
+    /// "create account" button — it runs the identical verify flow.
+    public func register(with credentials: any AuthCredentials) async throws -> AuthTokenSet {
+        try await authenticate(with: credentials)
+    }
+
     public func refresh(using refreshToken: String) async throws -> AuthTokenSet {
         var request = URLRequest(url: baseURL.appendingPathComponent(refreshPath))
         request.httpMethod = "POST"

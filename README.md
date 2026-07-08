@@ -77,9 +77,16 @@ AuthManager.shared.authStatePublisher
     .store(in: &cancellables)
 ```
 
-Sign in / out:
+Sign up / in / out:
 
 ```swift
+// Create a new account — the user is signed in automatically on success,
+// publishing the same .authenticating → .authenticated states as signIn.
+try await AuthManager.shared.signUp(
+    using: .emailPassword,
+    credentials: EmailPasswordCredentials(email: email, password: password, displayName: "Ada")
+)
+
 try await AuthManager.shared.signIn(
     using: .emailPassword,
     credentials: EmailPasswordCredentials(email: email, password: password)
@@ -87,6 +94,12 @@ try await AuthManager.shared.signIn(
 
 await AuthManager.shared.signOut()
 ```
+
+`signUp` is only meaningful for providers where registration is a distinct
+step (email/password, phone OTP, and custom REST if you supply a register
+request). For OAuth providers like Google and Facebook the first `signIn`
+already creates the account, so calling `signUp` there throws
+`AuthError.signUpNotSupported`.
 
 Make an authenticated request without ever touching the token (AuthKit
 refreshes it first if needed):
@@ -98,10 +111,11 @@ let (data, _) = try await URLSession.shared.data(for: request)
 
 ### The public surface, in full
 
-`AuthManager` exposes only: `configure(providers:)`, `signIn(using:credentials:)`,
-`signOut()`, `accessToken()`, `authorizedRequest(for:)`, `currentUser`,
-`authState`, and `authStatePublisher`. Refresh tokens, Keychain access, and the
-refresh scheduler are all internal and unreachable from app code.
+`AuthManager` exposes only: `configure(providers:)`, `signUp(using:credentials:)`,
+`signIn(using:credentials:)`, `signOut()`, `accessToken()`,
+`authorizedRequest(for:)`, `currentUser`, `authState`, and `authStatePublisher`.
+Refresh tokens, Keychain access, and the refresh scheduler are all internal and
+unreachable from app code.
 
 ## Providers
 
@@ -121,7 +135,7 @@ AuthManager.shared.configure(providers: [
 
 ### Email / password (`AuthKitEmailPassword`)
 
-REST-backed. Expects login/refresh endpoints returning
+REST-backed. Expects login/register/refresh endpoints returning
 `{ access_token, refresh_token, expires_in, user }` (snake_case decoded
 automatically).
 
@@ -132,7 +146,14 @@ import AuthKitEmailPassword
 EmailPasswordProvider(
     baseURL: URL(string: "https://api.example.com")!,
     loginPath: "auth/login",
+    registerPath: "auth/register",
     refreshPath: "auth/refresh"
+)
+
+// Sign up (displayName is sent only on sign-up)
+try await AuthManager.shared.signUp(
+    using: .emailPassword,
+    credentials: EmailPasswordCredentials(email: "user@example.com", password: "hunter2", displayName: "Ada")
 )
 
 // Sign in
@@ -206,7 +227,9 @@ etc. in `Info.plist`) as the SDK requires.
 
 For any backend that doesn't match the email/password shape. You supply
 closures that build the login/refresh requests and parse the response, so
-AuthKit never needs to know your field names.
+AuthKit never needs to know your field names. Provide `buildRegisterRequest`
+too if your backend supports sign-up (omit it and `signUp` throws
+`AuthError.signUpNotSupported`).
 
 ```swift
 import AuthKitRESTCustom
@@ -220,6 +243,14 @@ let provider = CustomRESTProvider(
     buildAuthenticateRequest: { credentials in
         guard let creds = credentials as? CustomCredentials else { throw AuthError.invalidCredentials }
         var request = URLRequest(url: URL(string: "https://acme.internal/token")!)
+        request.httpMethod = "POST"
+        request.httpBody = try JSONSerialization.data(withJSONObject: creds.fields)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        return request
+    },
+    buildRegisterRequest: { credentials in
+        guard let creds = credentials as? CustomCredentials else { throw AuthError.invalidCredentials }
+        var request = URLRequest(url: URL(string: "https://acme.internal/signup")!)
         request.httpMethod = "POST"
         request.httpBody = try JSONSerialization.data(withJSONObject: creds.fields)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -252,9 +283,10 @@ try await AuthManager.shared.signIn(
 
 ## Adding a new sign-in method
 
-Conform a type to `AuthProvider` (implement `authenticate`, `refresh`, and
-optionally `signOut`) and pass it to `configure(providers:)`. Nothing else in
-the package changes — that's the whole extension model.
+Conform a type to `AuthProvider` (implement `authenticate` and `refresh`, and
+optionally `register` for sign-up and `signOut`) and pass it to
+`configure(providers:)`. Nothing else in the package changes — that's the whole
+extension model.
 
 ## Examples
 

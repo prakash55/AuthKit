@@ -19,6 +19,42 @@ final class AuthManagerTests: XCTestCase {
         XCTAssertEqual(manager.authState, .authenticated(user))
     }
 
+    func test_signUp_publishesAuthenticatedState() async throws {
+        let manager = makeManager()
+        let provider = MockAuthProvider(
+            authenticateResult: .failure(.invalidCredentials),
+            registerResult: .success(.mock(userID: "new-user"))
+        )
+        manager.configure(providers: [provider])
+
+        let user = try await manager.signUp(using: .emailPassword, credentials: NoCredentials())
+
+        XCTAssertEqual(user.id, "new-user")
+        XCTAssertEqual(manager.currentUser?.id, "new-user")
+        XCTAssertEqual(manager.authState, .authenticated(user))
+        XCTAssertEqual(provider.registerCallCount, 1)
+    }
+
+    func test_signUp_whenProviderDoesNotSupportIt_throwsSignUpNotSupported() async {
+        let manager = makeManager()
+        // registerResult nil → provider reports sign-up unsupported (like Google/Facebook).
+        let provider = MockAuthProvider(id: .google, authenticateResult: .success(.mock()))
+        manager.configure(providers: [provider])
+
+        do {
+            _ = try await manager.signUp(using: .google, credentials: NoCredentials())
+            XCTFail("expected signUpNotSupported to be thrown")
+        } catch AuthError.signUpNotSupported(let id) {
+            XCTAssertEqual(id, .google)
+        } catch {
+            XCTFail("unexpected error: \(error)")
+        }
+
+        if case .error = manager.authState {} else {
+            XCTFail("expected .error state, got \(manager.authState)")
+        }
+    }
+
     func test_signIn_withUnregisteredProvider_throwsAndPublishesError() async {
         let manager = makeManager()
         manager.configure(providers: [])

@@ -59,9 +59,32 @@ public final class AuthManager: @unchecked Sendable {
     /// their own UI like Google/Facebook).
     @discardableResult
     public func signIn(using providerID: AuthProviderID, credentials: any AuthCredentials) async throws -> AuthUser {
+        try await authenticateFlow(using: providerID, credentials: credentials) { provider, credentials in
+            try await provider.authenticate(with: credentials)
+        }
+    }
+
+    /// Registers a new account with the given provider and signs the user in
+    /// on success (the flow is identical to `signIn` from the app's point of
+    /// view — the same `.authenticating` → `.authenticated` states are
+    /// published). Throws `AuthError.signUpNotSupported` for providers where
+    /// registration isn't a distinct step (e.g. Google/Facebook — use
+    /// `signIn` there, since the first sign-in creates the account).
+    @discardableResult
+    public func signUp(using providerID: AuthProviderID, credentials: any AuthCredentials) async throws -> AuthUser {
+        try await authenticateFlow(using: providerID, credentials: credentials) { provider, credentials in
+            try await provider.register(with: credentials)
+        }
+    }
+
+    private func authenticateFlow(
+        using providerID: AuthProviderID,
+        credentials: any AuthCredentials,
+        obtainTokens: (any AuthProvider, any AuthCredentials) async throws -> AuthTokenSet
+    ) async throws -> AuthUser {
         // If a cold-launch session restore is still in flight, let it finish
         // first so it can't race with (and clobber, or be clobbered by) this
-        // explicit sign-in.
+        // explicit sign-in / sign-up.
         await waitForPendingRestore()
 
         guard let provider = provider(for: providerID) else {
@@ -72,7 +95,7 @@ public final class AuthManager: @unchecked Sendable {
 
         stateSubject.send(.authenticating)
         do {
-            let tokenSet = try await provider.authenticate(with: credentials)
+            let tokenSet = try await obtainTokens(provider, credentials)
             try await activate(tokenSet: tokenSet, providerID: providerID, provider: provider)
             return tokenSet.user
         } catch let error as AuthError {

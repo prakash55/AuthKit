@@ -27,6 +27,18 @@ final class DemoProvider: AuthProvider, @unchecked Sendable {
         return issueTokenSet()
     }
 
+    func register(with credentials: any AuthCredentials) async throws -> AuthTokenSet {
+        guard let creds = credentials as? DemoCredentials else {
+            throw AuthError.invalidCredentials
+        }
+        // A real backend would create the account here; the demo just accepts
+        // any new username and signs them in.
+        guard !creds.username.isEmpty, creds.password.count >= 4 else {
+            throw AuthError.invalidCredentials
+        }
+        return issueTokenSet()
+    }
+
     func refresh(using refreshToken: String) async throws -> AuthTokenSet {
         guard refreshToken == "demo-refresh-token" else {
             throw AuthError.refreshFailed("unknown refresh token")
