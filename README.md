@@ -35,6 +35,7 @@ The package is split so you only pull in the SDKs you actually use:
 | `AuthKitRESTCustom` | Core + Foundation | iOS, macOS |
 | `AuthKitGoogle` | Core + [GoogleSignIn-iOS](https://github.com/google/GoogleSignIn-iOS) | iOS |
 | `AuthKitFacebook` | Core + [facebook-ios-sdk](https://github.com/facebook/facebook-ios-sdk) | iOS |
+| `AuthKitFirebase` | Core + [firebase-ios-sdk](https://github.com/firebase/firebase-ios-sdk) (`FirebaseAuth`) | iOS, macOS |
 
 Import `AuthKitCore` plus only the provider modules you need.
 
@@ -281,6 +282,54 @@ try await AuthManager.shared.signIn(
 )
 ```
 
+### Firebase (`AuthKitFirebase`)
+
+Backs several sign-in methods — email/password, phone, and Google — with one
+provider, since Firebase Auth is the backend for all of them. Firebase manages
+its own token lifecycle and persists the session; AuthKit bridges its `User`
+into the same `AuthState` stream and keeps the ID token fresh through the same
+refresh scheduler.
+
+Do the standard Firebase setup first (add `GoogleService-Info.plist`, call
+`FirebaseApp.configure()` at launch), then:
+
+```swift
+import AuthKitFirebase
+
+AuthManager.shared.configure(providers: [FirebaseAuthProvider()])
+
+// Email / password (signUp creates the account, signIn logs in)
+try await AuthManager.shared.signUp(
+    using: .firebase,
+    credentials: FirebaseCredentials.emailPassword(email: "user@example.com", password: "hunter2")
+)
+try await AuthManager.shared.signIn(
+    using: .firebase,
+    credentials: FirebaseCredentials.emailPassword(email: "user@example.com", password: "hunter2")
+)
+
+// Google — get the tokens from GoogleSignIn (or AuthKitGoogle) first, then
+// hand them to Firebase:
+try await AuthManager.shared.signIn(
+    using: .firebase,
+    credentials: FirebaseCredentials.google(idToken: googleIDToken, accessToken: googleAccessToken)
+)
+
+// Phone — two steps (iOS): request the SMS, then verify the code.
+let firebase = FirebaseAuthProvider()
+let verificationID = try await firebase.verifyPhoneNumber("+15551234567")
+try await AuthManager.shared.signIn(
+    using: .firebase,
+    credentials: FirebaseCredentials.phone(verificationID: verificationID, verificationCode: "123456")
+)
+```
+
+Only email/password has a distinct `signUp`; for phone and Google the first
+`signIn` creates the account, so `signUp` with those cases throws
+`AuthError.signUpNotSupported`. To also route Facebook/Apple through Firebase,
+extend `FirebaseCredentials` with a case that builds the corresponding
+`AuthCredential` — the rest of the provider is unchanged.
+
 ## Adding a new sign-in method
 
 Conform a type to `AuthProvider` (implement `authenticate` and `refresh`, and
@@ -316,12 +365,19 @@ Core is covered by unit tests (`Tests/AuthKitCoreTests`) using a mock provider:
 state transitions, sign-out, unregistered-provider handling, rejected
 credentials, cached vs. expired token, and cold-launch session restore.
 
-## Building the iOS-only providers
+## Building the SDK-backed providers
 
 `AuthKitGoogle` and `AuthKitFacebook` depend on iOS-only SDKs, so `swift build`
-on macOS can't compile them. Build them for an iOS destination:
+on macOS can't compile them. `AuthKitFirebase` builds on both, but its
+`PhoneAuthProvider.verifyPhoneNumber` helper is iOS-only. Build them for an iOS
+destination:
 
 ```
 xcodebuild build -scheme AuthKitGoogle   -destination "generic/platform=iOS Simulator"
 xcodebuild build -scheme AuthKitFacebook -destination "generic/platform=iOS Simulator"
+xcodebuild build -scheme AuthKitFirebase -destination "generic/platform=iOS Simulator"
 ```
+
+The Firebase SDK requires v11+ (pinned in `Package.swift`); earlier 10.x
+versions have a transitive `nanopb` platform conflict that breaks macOS
+command-line resolution for the whole package.

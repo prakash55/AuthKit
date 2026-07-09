@@ -40,6 +40,7 @@ public struct AuthProviderID: Hashable, Codable, Sendable, RawRepresentable {
     public static let google = AuthProviderID(rawValue: "google")
     public static let facebook = AuthProviderID(rawValue: "facebook")
     public static let phoneOTP = AuthProviderID(rawValue: "phoneOTP")
+    public static let firebase = AuthProviderID(rawValue: "firebase")
 }
 
 extension AuthProviderID: ExpressibleByStringLiteral {

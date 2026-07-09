@@ -13,11 +13,13 @@ let package = Package(
         .library(name: "AuthKitGoogle", targets: ["AuthKitGoogle"]),
         .library(name: "AuthKitFacebook", targets: ["AuthKitFacebook"]),
         .library(name: "AuthKitPhoneOTP", targets: ["AuthKitPhoneOTP"]),
-        .library(name: "AuthKitRESTCustom", targets: ["AuthKitRESTCustom"])
+        .library(name: "AuthKitRESTCustom", targets: ["AuthKitRESTCustom"]),
+        .library(name: "AuthKitFirebase", targets: ["AuthKitFirebase"])
     ],
     dependencies: [
         .package(url: "https://github.com/google/GoogleSignIn-iOS", from: "7.1.0"),
-        .package(url: "https://github.com/facebook/facebook-ios-sdk", from: "17.0.0")
+        .package(url: "https://github.com/facebook/facebook-ios-sdk", from: "17.0.0"),
+        .package(url: "https://github.com/firebase/firebase-ios-sdk", from: "11.0.0")
     ],
     targets: [
         // MARK: - Core (zero third-party dependencies)
@@ -55,6 +57,13 @@ let package = Package(
             dependencies: [
                 "AuthKitCore",
                 .product(name: "FacebookLogin", package: "facebook-ios-sdk")
+            ]
+        ),
+        .target(
+            name: "AuthKitFirebase",
+            dependencies: [
+                "AuthKitCore",
+                .product(name: "FirebaseAuth", package: "firebase-ios-sdk")
             ]
         ),
 
